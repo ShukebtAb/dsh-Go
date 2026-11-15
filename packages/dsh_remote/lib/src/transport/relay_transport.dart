@@ -23,7 +23,9 @@ Future<WebSocket> _defaultConnector(Uri url, Duration timeout) {
   var expired = false;
   // timeout does not cancel the opening Future. Keep ownership of a socket
   // that arrives after the caller has already received the timeout.
-  final opening = WebSocket.connect(url.toString()).then((socket) {
+  final client = HttpClient()
+    ..badCertificateCallback = (cert, host, port) => _isIpLiteral(host);
+  final opening = WebSocket.connect(url.toString(), customClient: client).then((socket) {
     if (expired) unawaited(socket.close(WebSocketStatus.normalClosure).catchError((Object _) {}));
     return socket;
   });
@@ -34,6 +36,11 @@ Future<WebSocket> _defaultConnector(Uri url, Duration timeout) {
       throw TimeoutException('Future not completed', timeout);
     },
   );
+}
+
+bool _isIpLiteral(String host) {
+  final literal = host.startsWith('[') && host.endsWith(']') ? host.substring(1, host.length - 1) : host;
+  return InternetAddress.tryParse(literal) != null;
 }
 
 /// Diagnostic hook: every Control frame in or out, and Relay data frames as
