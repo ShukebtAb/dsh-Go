@@ -59,6 +59,17 @@ bool _isPrivateHost(String host) {
       (a == 100 && b >= 64 && b <= 127);
 }
 
+/// Relax certificate verification only for IP-literal hosts (self-hosted
+/// IP direct connections: the certificate SAN lists a domain, not the IP).
+/// Domain names still get strict verification.
+bool _allowBadCertificateForIpLiteral(X509Certificate cert, String host, int port) =>
+    _isIpLiteral(host);
+
+bool _isIpLiteral(String host) {
+  final literal = host.startsWith('[') && host.endsWith(']') ? host.substring(1, host.length - 1) : host;
+  return InternetAddress.tryParse(literal) != null;
+}
+
 /// `wss://<host>/ws/v1/connect` for [server].
 Uri controlSocketUrl(Uri server) =>
     server.replace(scheme: server.scheme == 'https' ? 'wss' : 'ws', path: '/ws/v1/connect');
@@ -298,7 +309,9 @@ class RemoteServerCapabilities {
 class RemoteServerApi {
   RemoteServerApi(Object serverUrl, {HttpClient? httpClient, this.timeout = const Duration(seconds: 10)})
     : serverUrl = normalizeServerUrl(serverUrl),
-      _http = httpClient ?? (HttpClient()..connectionTimeout = timeout),
+      _http = httpClient ?? (HttpClient()
+        ..connectionTimeout = timeout
+        ..badCertificateCallback = _allowBadCertificateForIpLiteral),
       _ownsClient = httpClient == null;
 
   final Uri serverUrl;
